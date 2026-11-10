@@ -1,0 +1,165 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Der ultimative Knopf</title>
+
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-family: Arial, sans-serif;
+    background: #171717;
+    color: white;
+    text-align: center;
+  }
+
+  h1 { font-size: 32px; }
+
+  #button {
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    border: 8px solid #a51e1e;
+    background: linear-gradient(#ff5555, #c90000);
+    color: white;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 12px 0 #790000;
+    transition: all 0.2s;
+  }
+
+  #button:active:not(:disabled) {
+    transform: translateY(10px);
+    box-shadow: 0 2px 0 #790000;
+  }
+
+  #button:disabled {
+    background: #555;
+    border-color: #444;
+    box-shadow: 0 8px 0 #333;
+    cursor: not-allowed;
+    color: #ccc;
+  }
+
+  #status {
+    margin-top: 35px;
+    font-size: 20px;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>Der ultimative Knopf</h1>
+<p>Es gibt kein Zurück.</p>
+
+<button id="button" disabled>
+  LADEN...
+</button>
+
+<div id="status">Verbinde mit der Datenbank...</div>
+
+<script>
+  // HIER DEINE SUPABASE-DATEN EINTRAGEN
+  const SUPABASE_URL = "DEINE_PROJECT_URL";
+  const SUPABASE_KEY = "DEIN_PUBLISHABLE_KEY";
+
+  const button = document.getElementById("button");
+  const status = document.getElementById("status");
+
+  let pressed = false;
+  let busy = false;
+
+  async function request(path, options = {}) {
+    const response = await fetch(
+      SUPABASE_URL + "/rest/v1/" + path,
+      {
+        ...options,
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + SUPABASE_KEY,
+          "Content-Type": "application/json",
+          ...options.headers
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Datenbankfehler: " + response.status);
+    }
+
+    return response.json();
+  }
+
+  function updateDisplay() {
+    button.disabled = pressed || busy;
+
+    if (pressed) {
+      button.textContent = "GEDRÜCKT";
+      status.textContent = "Dieser Knopf ist für immer gedrückt. ❤️";
+    } else {
+      button.textContent = "DRÜCK MICH";
+      status.textContent = "Noch wurde er nicht gedrückt...";
+    }
+  }
+
+  async function loadState() {
+    const data = await request(
+      "button_state?id=eq.1&select=pressed"
+    );
+
+    if (!data.length) {
+      throw new Error("Knopf nicht gefunden.");
+    }
+
+    pressed = data[0].pressed;
+    updateDisplay();
+  }
+
+  button.addEventListener("click", async () => {
+    if (pressed || busy) return;
+
+    busy = true;
+    button.disabled = true;
+    button.textContent = "...";
+
+    try {
+      await request("rpc/press_button", {
+        method: "POST",
+        body: "{}"
+      });
+
+      await loadState();
+    } catch (error) {
+      status.textContent = "Fehler! Bitte erneut versuchen.";
+      console.error(error);
+    } finally {
+      busy = false;
+      updateDisplay();
+    }
+  });
+
+  async function refresh() {
+    try {
+      await loadState();
+    } catch (error) {
+      status.textContent = "Verbindungsfehler. Bitte später neu laden.";
+      button.disabled = true;
+      console.error(error);
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+
+</body>
+</html>
